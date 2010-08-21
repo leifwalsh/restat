@@ -69,6 +69,7 @@ function Restat(repos, days) {
 
     self.commitsToGet = {};
     self.repos = {};
+    self.all = {};
     $.each(repos, function(i, repo) {
                self.repos[repo] = {};
                self.getBranches(repo);
@@ -239,10 +240,6 @@ function displayCommitterTotals(branch, committer_map, all_branch_map) {
     }
 }
 
-// function connectEvents() {
-//     $('.toggle').parent().click(function() { $(this).children('.toggle').toggle('fast'); });
-// }
-
 $(document).ready(
     function() {
         var keepAnimating = false;
@@ -268,50 +265,4 @@ $(document).ready(
 
         var restat = new Restat(['coffeemug/rethinkdb'], 4);
         restat.update();
-
-        // var all_branch_map = {};
-
-        // var branchHandler = function() {
-        //     var branches = [];
-        //     var branch = arguments[arguments.length - 1];
-        //     for (var i = arguments.length - 2; i >= 0; --i) {
-        //         branches.push(arguments[i]);
-        //     }
-        //     var committer_map = {};
-        //     /*?             var branches_node = main.find('#branches');
-        //  */
-        //     $.getJSON('/cgi-bin/echo.pl?uri=' +
-        //               encodeURI(sprintf('https://github.com' +
-        //                                 '/api/v2/json/commits/list/%s/%s',
-        //                                 repo, branch)),
-        //               function(data, textStatus) {
-        //                   /*                var commit_list = $('<ol class="hidden toggle"></ol>')
-        //                    var branch_node = $(sprintf(
-        //                    '<li class="branch">' +
-        //                    '<a href="https://github.com/%s/tree/%s">%s</a></li>',
-        //                    repo, branch, branch));
-        //                    branch_node.append(commit_list);
-        //                    branches_node.prepend(branch_node);
-        //                    */
-        //                   $.each(data.commits, function (i, cmt) {
-        //                              var committed_date = new Date(
-        //                                  cmt.committed_date.replace(/T/, ' ').substr(0, 19));
-        //                              if (committed_date >= yesterday) {
-        //                                  addCommitToList(all_branch_map, cmt);
-        //                                  addCommitToList(committer_map, cmt);
-        //                                  return true;
-        //                                  /*                      commit_list.append(commitToHTML(cmt));
-        //                                   */
-        //                              } else {
-        //                                  return false;
-        //                              }
-        //                          });
-
-        //                   displayCommitterTotals(branch, committer_map, branches.length === 0 ? all_branch_map : null);
-        //                   if (branches.length > 0) {
-        //                       branchHandler.apply(this, branches);
-        //                   }
-        //               });
-        // };
-        // getBranches(repo, branchHandler);
     });
