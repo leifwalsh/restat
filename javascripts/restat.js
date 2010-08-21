@@ -72,6 +72,7 @@ function Restat(repos, days) {
     self.all = {};
     $.each(repos, function(i, repo) {
                self.repos[repo] = {};
+               self.all[repo] = {};
                self.getBranches(repo);
            });
 };
@@ -137,8 +138,8 @@ Restat.prototype = {
         var self = this;
 
         var name = self.getName(commit);
-        if (self.all[name] === undefined) {
-            self.all[name] = {};
+        if (self.all[repo][name] === undefined) {
+            self.all[repo][name] = {};
         }
         if (self.repos[repo][branch][name] === undefined) {
             self.repos[repo][branch][name] = {};
@@ -152,100 +153,169 @@ Restat.prototype = {
         }
         return h;
     },
+    numBranches: function(repo) {
+        return self.repos[repo].length;
+    },
+    branchColor: function(repo, branchNum) {
+        var self = this;
+        return sprintf('hsb(%ddeg, 0.5, 0.95)',
+                       (branchNum / self.numBranches(repo)) * 360);
+    },
+    authorColor: function(author) {
+        return sprintf('hsb(%ddeg, 0.5, 0.95)', hash(author) % 360);
+    },
+    barGradient: function(author) {
+        var rot = hash(author) % 360;
+        return sprintf('90-hsb(%ddeg, 0.3, 0.4)-hsb(%ddeg, 0.6, 0.98)',
+                       rot, rot);
+    },
     displayRepo: function(repo) {
         var self = this;
-        $.each(dictKeys(self.repos[repo]), function(i, branch) {
-                   displayCommitterTotals(branch, self.repos[repo][branch], self.all);
-               });
-    }
-};
 
-var branchNum = 0;
-function displayCommitterTotals(branch, committer_map, all_branch_map) {
-    branchNum++;
-    var totalCommits = 0;
-    var maxCommits = 0;
-    var authors = [];
-    $.each(dictKeys(committer_map), function(i, author) {
-               authors.push(author);
-               var commits = dictKeys(committer_map[author]).length;
-               totalCommits += commits;
-               if (commits > maxCommits) {
-                   maxCommits = commits;
-               }
-           });
-    if (totalCommits > 0) {
-        var paper = Raphael('raphael_canvas', 700, 21 * authors.length - 1);
-        var text = paper.print(-700, 11 * authors.length, branch, paper.getFont('AurulentSans', 'bold'), 16);
-        text.attr('fill', 'hsb(' + (branchNum / numBranches) * 360 + 'deg, 0.5, 0.95)');
-        authors.sort(function(a, b) {
-                         return dictKeys(committer_map[b]).length - dictKeys(committer_map[a]).length;
-                     });
+        var branchNum = 0;
+        $.each(dictKeys(self.repos[repo]), function(i, branch) {
+                   var totalCommits = 0;
+                   var maxCommits = 0;
+                   var authors = {};
+                   $.each(dictKeys(self.repos[repo][branch]),
+                          function(i, author) {
+                              var commits = dictKeys(
+                                  self.repos[repo][branch][author]).length;
+                              authors[author] = commits;
+                              totalCommits += commits;
+                              if (commits > maxCommits) {
+                                  maxCommits = commits;
+                              }
+                          });
+                   if (totalCommits > 0) {
+                       self.drawBranch(repo, branch, branchNum, authors,
+                                       maxCommits);
+                   } else {
+                       self.drawEmptyBranch(repo, branch, branchNum);
+                   }
+               });
+    },
+    displayAll: function(repo) {
+        var self = this;
+
+        var branchNum = self.repos[repo].length;
+        var totalCommits = 0;
+        var maxCommits = 0;
+        var authors = {};
+        $.each(dictKeys(self.all[repo]), function(i, author) {
+                   var commits = dictKeys(self.all[repo][author]).length;
+                   authors[author] = commits;
+                   totalCommits += commits;
+                   if (commits > maxCommits) {
+                       maxCommits = commits;
+                   }
+               });
+        if (totalCommits > 0) {
+            self.drawBranch(repo, 'all', branchNum, authors, maxCommits);
+        } else {
+            self.drawEmptyBranch(repo, 'all', branchNum);
+        }
+    },
+    drawBranch: function(repo, branch, branchNum, authors, maxCommits) {
+        var self = this;
+
+        var r = Raphael('raphael_canvas', 700,
+                        21 * dictKeys(authors).length - 1);
+
+        var text = r.print(-700, 11 * authors.length, branch,
+                           r.getFont('AurulentSans', 'bold'), 16);
+        text.attr('fill', self.branchColor(branchNum));
+
+        var authorNames = dictKeys(authors);
+        authorNames.sort(function(a, b) { return authors[b] - authors[a]; });
+
         var drawn = 0;
-        var set = paper.set();
+        var set = r.set();
         set.push(text);
         var thunks = [];
-        $.each(authors, function(i, author) {
-                   var commits = dictKeys(committer_map[author]).length;
-                   var width = commits * 190 / maxCommits;
-                   var num = paper.print(-450, drawn * 22 + 12, sprintf('%4d', commits), paper.getFont('DejaVu', 'bold'), 16);
-                   num.attr('fill', 'hsb(' + hash(author) % 360 + 'deg, 0.5, 0.95)');
-                   var rect = paper.rect(-400, drawn * 22 + 2, 20, 20, 10);
-                   rect.attr('fill', '90-hsb(' + hash(author) % 360 + 'deg, 0.3, 0.4)-hsb(' + hash(author) % 360 + 'deg, 0.6, 0.98)');
+        $.each(authorNames, function(i, author) {
+                   var width = authors[author] * 190 / maxCommits;
+
+                   var num = r.print(-450, drawn * 22 + 12,
+                                     sprintf('%4d', authors[author]),
+                                     r.getFont('DejaVu', 'bold'), 16);
+                   num.attr('fill', self.authorColor(author));
+
+                   var rect = r.rect(-400, drawn * 22 + 2, 20, 20, 10);
+                   rect.attr('fill', self.barGradient(author));
                    rect.attr('stroke', '#282828');
-                   thunks.push(function() {
-                                   rect.animate({'width': width + 10}, 1000, '>');
-                                   if (arguments.length > 0) {
-                                       arguments[0].call();
+                   thunks.push(function(i) {
+                                   rect.animate({'width': width + 10},
+                                                1000, '>');
+                                   if ((branchNum ===
+                                        self.numBranches(repo) - 1) &&
+                                       (i === thunks.length - 1)) {
+                                       self.displayAll(repo);
                                    }
                                });
-                   var text = paper.print(-190, drawn * 22 + 12, author, paper.getFont('AurulentSans', 'bold'), 16);
-                   text.attr('fill', 'hsb(' + hash(author) % 360 + 'deg, 0.5, 0.95)');
+
+                   var text = r.print(-190, drawn * 22 + 12, author,
+                                      r.getFont('AurulentSans', 'bold'), 16);
+                   text.attr('fill', self.authorColor(author));
                    set.push(num, rect, text);
                    drawn++;
                });
+
+        var triggerThunks = function() {
+            $.each(thunks, function (i, thunk) {
+                       thunk.call(null, i);
+                   });
+        };
+        var revealGraph = function() {
+            set.animate({'translation': '700 0'}, 300, 'elastic', function() {
+                            setTimeout(triggerThunks, 300);
+                        });
+        };
+
+        $('#raphael_canvas > svg:hidden')
+            .attr('id', branch)
+            .show('blind', revealGraph);
+    },
+    drawEmptyBranch: function(repo, branch, branchNum) {
+        var self = this;
+
+        var r = Raphael('raphael_canvas', 700, 20);
+
+        var text = r.print(-250, 10, branch,
+                           r.getFont('AurulentSans', 'bold'), 16);
+        text.attr('fill', self.branchColor(branchNum));
+
+        var nothing = r.print(-250, 10, 'no commits',
+                              r.getFont('AurulentSans', 'bold'), 16);
+        nothing.attr('fill', self.branchColor(branchNum));
+
         $('#raphael_canvas > svg:hidden')
             .attr('id', branch)
             .show('blind', function() {
-                      set.animate({'translation': '700 0'}, 300, 'elastic',
-                                  function() {
-                                      setTimeout(function() {
-                                                     $.each(thunks, function (i, thunk) {
-                                                                if (all_branch_map && i === thunks.length - 1) {
-                                                                    thunk.call(function() { displayCommitterTotals('all', all_branch_map); });
-                                                                } else {
-                                                                    thunk.call();
-                                                                }
-                                                            });
-                                                 }, 300);
-                                  });
-                  });
-        //        text.attr('x', 240 - text.attr('width'));
-    } else {
-        var paper = Raphael('raphael_canvas', 700, 20);
-        var text = paper.print(-250, 10, branch, paper.getFont('AurulentSans', 'bold'), 16);
-        text.attr('fill', 'hsb(' + (branchNum / numBranches) * 360 + 'deg, 0.5, 0.95)');
-        var nothing = paper.print(-250, 10, 'no commits', paper.getFont('AurulentSans', 'bold'), 16);
-        nothing.attr('fill', 'hsb(' + (branchNum / numBranches) * 360 + 'deg, 0.5, 0.95)');
-        $('#raphael_canvas > svg:hidden')
-            .attr('id', branch)
-            .show('blind', function() {
-                      nothing.animate({'translation': '550 0'}, 300, 'elastic');
-                      if (all_branch_map) {
-                          text.animate({'translation': '250 0'}, 300, 'elastic', function() { displayCommitterTotals('all', all_branch_map); });
+                      nothing.animate({'translation': '550 0'}, 300,
+                                      'elastic');
+                      if (branchNum === self.numBranches(repo) - 1) {
+                          text.animate({'translation': '250 0'}, 300,
+                                       'elastic',
+                                       function() {
+                                           self.displayAll(repo);
+                                       });
                       } else {
-                          text.animate({'translation': '250 0'}, 300, 'elastic');
+                          text.animate({'translation': '250 0'}, 300,
+                                       'elastic');
                       }
                   });
     }
-}
+};
+
 
 $(document).ready(
     function() {
         var keepAnimating = false;
         var animateRight = function() {
             if (keepAnimating) {
-                $(this).animate({'left': $(window).width() - 132}, 3000, 'linear', animateLeft);
+                $(this).animate({'left': $(window).width() - 132}, 3000,
+                                'linear', animateLeft);
             }
         }, animateLeft = function() {
             if (keepAnimating) {
@@ -258,7 +328,8 @@ $(document).ready(
             keepAnimating = false;
             $(this).stop().hide();
         };
-        $('#loading').css('top', $('header').height() + 40 - $('#loading').height() / 2)
+        $('#loading').css('top', ($('header').height() + 40 -
+                                  $('#loading').height() / 2))
             .ajaxStart(startAnimation)
             .ajaxStop(stopAnimation);
 
