@@ -6,6 +6,13 @@ Monitors status of a github-enabled shop.
 USAGE
 -----
 
+First, you'll need to know your github username and token (only important for
+private repos, but I don't differentiate).  You can find the token at
+[github.com/account](https://github.com/account) under "API Token".
+
+Then, check your dependencies, expand the CGI script, and install it, by
+running:
+
     make GHUSER=<github username> GHTOKEN=<github api token>
 
 If this tells you to install things, install them.  You'll likely need root in
