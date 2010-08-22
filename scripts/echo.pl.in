@@ -1,0 +1,30 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+
+use CGI;
+use URI::Escape;
+
+my $q = CGI->new;
+my $uri = $q->param('uri');
+
+die if !defined($uri) or $uri =~ m/^$/;
+
+print $q->header(-Content_Type => "application/json");
+
+exec('curl', '-s', '-u', '@USER@/token:' .
+     '@TOKEN@',
+     uri_unescape($uri));
+
+__END__
+
+=pod
+
+=head1 DEPENDENCIES
+
+L<CGI>,
+L<URI::Escape>,
+L<Crypt::SSLeay>
+
+=cut
