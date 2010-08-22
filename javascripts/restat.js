@@ -8,6 +8,17 @@ function dictKeys(d) {
     return keys;
 };
 
+Array.prototype.remove = function(obj) {
+    var idx = -1;
+    for (var i = 0; i < this.length; ++i) {
+        if (this[i] === obj) {
+            idx = i;
+            break;
+        }
+    }
+    return this.splice(idx, 1);
+};
+
 function str_repeat(i, m) {
     for (var o = []; m > 0; o[--m] = i) {}
     return o.join('');
@@ -60,10 +71,10 @@ function Restat(repos, days) {
 
     var today = new Date();
     if (today.getDay() > days - 1) {
-        self.cutoff = new Date(today.getYear + 1900, today.getMonth(),
+        self.cutoff = new Date(today.getYear() + 1900, today.getMonth(),
                                today.getDate() - days + 1);
     } else {
-        self.cutoff = new Date(today.getYear + 1900, today.getMonth(),
+        self.cutoff = new Date(today.getYear() + 1900, today.getMonth(),
                                today.getDate() - days - 1);
     }
 
@@ -77,7 +88,7 @@ function Restat(repos, days) {
            });
 };
 Restat.prototype = {
-    baseUri: '/cgi-bin/echo.pl',
+    baseUri: 'http://localhost/cgi-bin/echo.pl',
     githubUri: 'http://github.com/api/v2/json',
     branchUri: '/repos/show/%s/branches',
     commitUri: '/commits/list/%s/%s',
@@ -91,7 +102,7 @@ Restat.prototype = {
     getBranches: function(repo) {
         var self = this;
         $.getJSON(
-            self.baseURI,
+            self.baseUri,
             {'uri': self.githubUri + sprintf(self.branchUri, repo)},
             function(data, textStatus) {
                 if (textStatus === 'success' && data !== null) {
@@ -108,7 +119,7 @@ Restat.prototype = {
     getCommits: function(repo, branch) {
         var self = this;
         $.getJSON(
-            self.baseURI,
+            self.baseUri,
             {'uri': self.githubUri + sprintf(self.commitUri, repo, branch)},
             function(data, textStatus) {
                 self.filterAndStore(repo, branch, data.commits);
@@ -124,8 +135,8 @@ Restat.prototype = {
     filterAndStore: function(repo, branch, commits) {
         var self = this;
         $.each(dictKeys(commits), function(i, id) {
-                   if (self.committedDate(commit) >= self.cutoff) {
-                       self.storeCommit(repo, branch, id, commit);
+                   if (self.committedDate(commits[id]) >= self.cutoff) {
+                       self.storeCommit(repo, branch, commits[id]);
                    }
                });
     },
@@ -134,7 +145,7 @@ Restat.prototype = {
             commit.committer.login || commit.committer.name ||
             'unknown';
     },
-    storeCommit: function(repo, branch, id, commit) {
+    storeCommit: function(repo, branch, commit) {
         var self = this;
 
         var name = self.getName(commit);
@@ -144,7 +155,8 @@ Restat.prototype = {
         if (self.repos[repo][branch][name] === undefined) {
             self.repos[repo][branch][name] = {};
         }
-        self.repos[repo][branch][name][id] = self.all[name][id] = commit;
+        self.repos[repo][branch][name][commit.id] = commit;
+        self.all[repo][name][commit.id] = commit;
     },
     hashName: function(s) {
         var h = 0;
@@ -154,7 +166,8 @@ Restat.prototype = {
         return h;
     },
     numBranches: function(repo) {
-        return self.repos[repo].length;
+        var self = this;
+        return dictKeys(self.repos[repo]).length;
     },
     branchColor: function(repo, branchNum) {
         var self = this;
@@ -162,10 +175,10 @@ Restat.prototype = {
                        (branchNum / self.numBranches(repo)) * 360);
     },
     authorColor: function(author) {
-        return sprintf('hsb(%ddeg, 0.5, 0.95)', hash(author) % 360);
+        return sprintf('hsb(%ddeg, 0.5, 0.95)', this.hashName(author) % 360);
     },
     barGradient: function(author) {
-        var rot = hash(author) % 360;
+        var rot = this.hashName(author) % 360;
         return sprintf('90-hsb(%ddeg, 0.3, 0.4)-hsb(%ddeg, 0.6, 0.98)',
                        rot, rot);
     },
@@ -193,12 +206,12 @@ Restat.prototype = {
                    } else {
                        self.drawEmptyBranch(repo, branch, branchNum);
                    }
+                   branchNum++;
                });
     },
     displayAll: function(repo) {
         var self = this;
 
-        var branchNum = self.repos[repo].length;
         var totalCommits = 0;
         var maxCommits = 0;
         var authors = {};
@@ -211,23 +224,24 @@ Restat.prototype = {
                    }
                });
         if (totalCommits > 0) {
-            self.drawBranch(repo, 'all', branchNum, authors, maxCommits);
+            self.drawBranch(repo, 'all', self.numBranches(repo), authors,
+                            maxCommits);
         } else {
-            self.drawEmptyBranch(repo, 'all', branchNum);
+            self.drawEmptyBranch(repo, 'all', self.numBranches(repo));
         }
     },
     drawBranch: function(repo, branch, branchNum, authors, maxCommits) {
         var self = this;
 
-        var r = Raphael('raphael_canvas', 700,
-                        21 * dictKeys(authors).length - 1);
-
-        var text = r.print(-700, 11 * authors.length, branch,
-                           r.getFont('AurulentSans', 'bold'), 16);
-        text.attr('fill', self.branchColor(branchNum));
-
         var authorNames = dictKeys(authors);
         authorNames.sort(function(a, b) { return authors[b] - authors[a]; });
+
+        var r = Raphael('raphael_canvas', 700,
+                        21 * authorNames.length - 1);
+
+        var text = r.print(-700, 11 * authorNames.length, branch,
+                           r.getFont('AurulentSans', 'bold'), 16);
+        text.attr('fill', self.branchColor(repo, branchNum));
 
         var drawn = 0;
         var set = r.set();
@@ -281,30 +295,24 @@ Restat.prototype = {
 
         var r = Raphael('raphael_canvas', 700, 20);
 
-        var text = r.print(-250, 10, branch,
+        var text = r.print(-700, 10, branch,
                            r.getFont('AurulentSans', 'bold'), 16);
-        text.attr('fill', self.branchColor(branchNum));
+        text.attr('fill', self.branchColor(repo, branchNum));
 
-        var nothing = r.print(-250, 10, 'no commits',
+        var nothing = r.print(-400, 10, 'no commits',
                               r.getFont('AurulentSans', 'bold'), 16);
-        nothing.attr('fill', self.branchColor(branchNum));
+        nothing.attr('fill', self.branchColor(repo, branchNum));
 
         $('#raphael_canvas > svg:hidden')
             .attr('id', branch)
             .show('blind', function() {
-                      nothing.animate({'translation': '550 0'}, 300,
+                      nothing.animate({'translation': '700 0'}, 300,
                                       'elastic');
-                      if (branchNum === self.numBranches(repo) - 1) {
-                          text.animate({'translation': '250 0'}, 300,
-                                       'elastic',
-                                       function() {
-                                           self.displayAll(repo);
-                                       });
-                      } else {
-                          text.animate({'translation': '250 0'}, 300,
-                                       'elastic');
-                      }
+                      text.animate({'translation': '700 0'}, 300, 'elastic');
                   });
+        if (branchNum === self.numBranches(repo) - 1) {
+            self.displayAll(repo);
+        }
     }
 };
 
