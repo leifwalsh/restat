@@ -161,7 +161,7 @@ Restat.prototype = {
     hashName: function(s) {
         var h = 0;
         for (var i = 0; i < s.length; i++) {
-            h = h + s.charCodeAt(i) + 10;
+            h = h + s.charCodeAt(i) + 987235;
         }
         return h;
     },
@@ -171,15 +171,23 @@ Restat.prototype = {
     },
     branchColor: function(repo, branchNum) {
         var self = this;
-        return sprintf('hsb(%ddeg, 0.5, 0.95)',
-                       (branchNum / self.numBranches(repo)) * 360);
+        return sprintf('hsb(%ddeg, 0.6, 0.9)',
+                       (30 + branchNum * 360) / (self.numBranches(repo) + 1));
     },
     authorColor: function(author) {
-        return sprintf('hsb(%ddeg, 0.5, 0.95)', this.hashName(author) % 360);
+        var self = this;
+        return sprintf('hsb(%ddeg, 0.6, 0.9)', self.hashName(author) % 360);
     },
     barGradient: function(author) {
-        var rot = this.hashName(author) % 360;
-        return sprintf('90-hsb(%ddeg, 0.3, 0.4)-hsb(%ddeg, 0.6, 0.98)',
+        var self = this;
+        var rot = self.hashName(author) % 360;
+        return sprintf('90-hsb(%ddeg, 0.3, 0.4)-hsb(%ddeg, 0.6, 0.9)',
+                       rot, rot);
+    },
+    lbarGradient: function(repo, branchNum) {
+        var self = this;
+        var rot = (30 + branchNum * 360) / (self.numBranches(repo) + 1);
+        return sprintf('0-hsb(%ddeg, 0.3, 0.4)-hsb(%ddeg, 0.6, 0.9)',
                        rot, rot);
     },
     displayRepo: function(repo) {
@@ -236,26 +244,30 @@ Restat.prototype = {
         var authorNames = dictKeys(authors);
         authorNames.sort(function(a, b) { return authors[b] - authors[a]; });
 
-        var r = Raphael('raphael_canvas', 700,
-                        21 * authorNames.length - 1);
+        var r = Raphael('raphael_canvas', 450,
+                        21 * authorNames.length + 14);
 
-        var text = r.print(-700, 11 * authorNames.length, branch,
+        var lbar = r.rect(-450, 0, 20, 21 * authorNames.length + 14, 10);
+        lbar.attr('fill', self.lbarGradient(repo, branchNum));
+        lbar.attr('stroke', '#282828');
+        var text = r.print(-400, 0, branch,
                            r.getFont('AurulentSans', 'bold'), 16);
         text.attr('fill', self.branchColor(repo, branchNum));
 
         var drawn = 0;
         var set = r.set();
         set.push(text);
+        set.push(lbar);
         var thunks = [];
         $.each(authorNames, function(i, author) {
                    var width = authors[author] * 190 / maxCommits;
 
-                   var num = r.print(-450, drawn * 22 + 12,
+                   var num = r.print(-450, 15 + drawn * 22 + 12,
                                      sprintf('%4d', authors[author]),
                                      r.getFont('DejaVu', 'bold'), 16);
                    num.attr('fill', self.authorColor(author));
 
-                   var rect = r.rect(-400, drawn * 22 + 2, 20, 20, 10);
+                   var rect = r.rect(-400, 15 + drawn * 22 + 2, 20, 20, 10);
                    rect.attr('fill', self.barGradient(author));
                    rect.attr('stroke', '#282828');
                    thunks.push(function(i) {
@@ -268,7 +280,7 @@ Restat.prototype = {
                                    }
                                });
 
-                   var text = r.print(-190, drawn * 22 + 12, author,
+                   var text = r.print(-190, 15 + drawn * 22 + 12, author,
                                       r.getFont('AurulentSans', 'bold'), 16);
                    text.attr('fill', self.authorColor(author));
                    set.push(num, rect, text);
@@ -281,9 +293,10 @@ Restat.prototype = {
                    });
         };
         var revealGraph = function() {
-            set.animate({'translation': '700 0'}, 300, 'elastic', function() {
+            set.animate({'translation': '450 0'}, 300, 'elastic', function() {
                             setTimeout(triggerThunks, 300);
                         });
+            $(this).css('display', 'block');
         };
 
         $('#raphael_canvas > svg:hidden')
@@ -293,22 +306,23 @@ Restat.prototype = {
     drawEmptyBranch: function(repo, branch, branchNum) {
         var self = this;
 
-        var r = Raphael('raphael_canvas', 700, 20);
+        var r = Raphael('raphael_canvas', 450, 35);
 
-        var text = r.print(-700, 10, branch,
+        var text = r.print(-400, 0, branch,
                            r.getFont('AurulentSans', 'bold'), 16);
         text.attr('fill', self.branchColor(repo, branchNum));
 
-        var nothing = r.print(-400, 10, 'no commits',
+        var nothing = r.print(-400, 25, 'no commits',
                               r.getFont('AurulentSans', 'bold'), 16);
-        nothing.attr('fill', self.branchColor(repo, branchNum));
+        nothing.attr('fill', '#666');
 
         $('#raphael_canvas > svg:hidden')
             .attr('id', branch)
             .show('blind', function() {
-                      nothing.animate({'translation': '700 0'}, 300,
+                      nothing.animate({'translation': '450 0'}, 300,
                                       'elastic');
-                      text.animate({'translation': '700 0'}, 300, 'elastic');
+                      text.animate({'translation': '450 0'}, 300, 'elastic');
+                      $(this).css('display', 'block');
                   });
         if (branchNum === self.numBranches(repo) - 1) {
             self.displayAll(repo);
@@ -319,6 +333,10 @@ Restat.prototype = {
 
 $(document).ready(
     function() {
+        // config
+        var repos = ['coffeemug/rethinkdb'];
+        var days = 4;
+
         var keepAnimating = false;
         var animateRight = function() {
             if (keepAnimating) {
@@ -342,6 +360,7 @@ $(document).ready(
             .ajaxStop(stopAnimation);
 
 
-        var restat = new Restat(['coffeemug/rethinkdb'], 4);
+        var restat = new Restat(repos, days);
+        $('#num_days').text('' + days);
         restat.update();
     });
