@@ -354,8 +354,8 @@ $(document).ready(
             keepAnimating = false;
             $(this).stop().hide();
         };
-        $('#loading').css('top', ($('header').height() + 40 -
-                                  $('#loading').height() / 2))
+        $('#loading')
+            .css('top', ($('header').height() + 46 - $('#loading').height()))
             .ajaxStart(startAnimation)
             .ajaxStop(stopAnimation);
 
