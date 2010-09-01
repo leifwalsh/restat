@@ -84,23 +84,23 @@ function Restat(repos, days) {
     $.each(repos, function(i, repo) {
                self.repos[repo] = {};
                self.all[repo] = {};
-               self.getBranches(repo);
            });
 };
 Restat.prototype = {
-    baseUri: 'http://localhost/cgi-bin/echo.pl',
+    baseUri: '/echo/',
     githubUri: 'http://github.com/api/v2/json',
     branchUri: '/repos/show/%s/branches',
     commitUri: '/commits/list/%s/%s',
 
     update: function() {
         var self = this;
-        $.each(self.repos, function(i, repo) {
+        $.each(dictKeys(self.repos), function(i, repo) {
                    self.getBranches(repo);
                });
     },
     getBranches: function(repo) {
         var self = this;
+        console.log(repo);
         $.getJSON(
             self.baseUri,
             {'uri': self.githubUri + sprintf(self.branchUri, repo)},
